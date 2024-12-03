@@ -42,20 +42,17 @@ class InputHandle:
             self.transform = transforms.Compose(transformation_list)
 
     def load(self):
-        print(f"Loading data from {self.paths[0]}")
         dat_1 = np.load(self.paths[0])
         for key in dat_1.keys():
             self.data[key] = dat_1[key]
-        print(f"Data loaded with keys: {list(self.data.keys())}")
-        print(f"Clips shape: {self.data['clips'].shape}")
-        print(f"Input raw data shape: {self.data['input_raw_data'].shape}")
-        print(f"Output raw data shape: {self.data['output_raw_data'].shape}")
+        for key in self.data.keys():
+            print(key)
+            print(self.data[key].shape)
 
     def total(self):
         return self.data['clips'].shape[0]
 
     def begin(self, do_shuffle=True):
-        print("Beginning data iteration")
         self.indices = np.arange(self.total(), dtype="int32")
         if do_shuffle:
             random.shuffle(self.indices)
@@ -70,10 +67,6 @@ class InputHandle:
         # Fixed input/output length calculation
         self.current_input_length = 10  # Half of seq_length from data2npz.py
         self.current_output_length = 10  # Half of seq_length from data2npz.py
-        
-        print(f"Batch indices: {self.current_batch_indices}")
-        print(f"Input length: {self.current_input_length}")
-        print(f"Output length: {self.current_output_length}")
 
     def next(self):
         self.current_position += self.current_batch_size
@@ -94,11 +87,8 @@ class InputHandle:
 
     def get_batch(self):
         if self.no_batch_left():
-            print("No batch left")
             return None
             
-        print(f"Getting batch at position {self.current_position}")
-        
         # If this is the last batch and it's incomplete, pad it to match batch_size
         remaining_samples = self.total() - self.current_position
         if remaining_samples < self.minibatch_size:
@@ -107,7 +97,6 @@ class InputHandle:
                 (0, self.minibatch_size - remaining_samples),
                 mode='edge'  # Repeat the last index for padding
             )
-            print(f"Padded last batch indices to: {self.current_batch_indices}")
         
         # Create batch tensor with shape (batch_size, total_length, height, width, channels)
         batch = np.zeros(
@@ -120,25 +109,18 @@ class InputHandle:
         
         for i in range(self.minibatch_size):  # Always iterate through full batch size
             batch_ind = self.current_batch_indices[i]
-            print(f"Processing batch index {batch_ind}")
             
             # Get input sequence
             input_start = int(self.data['clips'][batch_ind, 0, 0])
             input_length = int(self.data['clips'][batch_ind, 0, 1])
             input_end = input_start + input_length
-            
-            print(f"Input slice - start: {input_start}, end: {input_end}, length: {input_length}")
             input_slice = self.data['input_raw_data'][input_start:input_end]
-            print(f"Input slice shape: {input_slice.shape}")
             
             # Get output sequence
             output_start = int(self.data['clips'][batch_ind, 1, 0])
             output_length = int(self.data['clips'][batch_ind, 1, 1])
             output_end = output_start + output_length
-            
-            print(f"Output slice - start: {output_start}, end: {output_end}, length: {output_length}")
             output_slice = self.data['output_raw_data'][output_start:output_end]
-            print(f"Output slice shape: {output_slice.shape}")
             
             if self.augmentations is not None:
                 # Apply augmentations to input sequence
@@ -166,5 +148,4 @@ class InputHandle:
             batch[i, :self.current_input_length] = input_slice
             batch[i, self.current_input_length:] = output_slice
         
-        print(f"Returning batch with shape {batch.shape}")
         return batch
